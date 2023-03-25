@@ -9,11 +9,14 @@ from pydlshogi2.player.base_player import BasePlayer
 
 import time
 import math
+import os
+import glob
 
-# デフォルトGPU ID
-DEFAULT_GPU_ID = 0
-# デフォルトバッチサイズ
-DEFAULT_BATCH_SIZE = 32
+# CPUのみ用の設定に変更
+# デフォルトGPU ID 0->-1
+DEFAULT_GPU_ID = -1
+# デフォルトバッチサイズ 32->8
+DEFAULT_BATCH_SIZE = 8
 # デフォルト投了閾値
 DEFAULT_RESIGN_THRESHOLD = 0.01
 # デフォルトPUCTの定数
@@ -70,10 +73,27 @@ class EvalQueueElement:
         self.color = color
 
 class MCTSPlayer(BasePlayer):
-    # USIエンジンの名前
-    name = 'python-dlshogi2'
+    # USIエンジンの名前等
+    # 各ファイルから読み込むように変更。
+    # ソフト名が記載しているファイル
+    name_txt_path = r'1-name.txt'
+    with open(name_txt_path, 'r') as f:
+        name = f.read()
+    # 作者名が記載しているファイル
+    author_txt_path = r'2-author.txt'
+    with open(author_txt_path, 'r') as f:
+        author = f.read()
+    
     # デフォルトチェックポイント
-    DEFAULT_MODELFILE = 'checkpoints/checkpoint.pth'
+    DEFAULT_MODELFILE_FOLDER = r'checkpoints/'
+    # checkpointsフォルダ内のモデルファイルのみ使う。
+    # 一つ目がデフォルトになる。
+    MODELFILES_STRING = ""
+    files = glob.glob(DEFAULT_MODELFILE_FOLDER + r"*.pth")
+    for file in files:
+        model_file = os.path.basename(file)
+        MODELFILES_STRING += " var " + model_file
+    DEFAULT_MODELFILE = model_file
 
     def __init__(self):
         super().__init__()
@@ -122,9 +142,10 @@ class MCTSPlayer(BasePlayer):
 
     def usi(self):
         print('id name ' + self.name)
+        print('id author ' + self.author)
         print('option name USI_Ponder type check default false')
-        print('option name modelfile type string default ' + self.DEFAULT_MODELFILE)
-        print('option name gpu_id type spin default ' + str(DEFAULT_GPU_ID) + ' min -1 max 7')
+        print('option name modelfile type combo default ' + self.DEFAULT_MODELFILE + self.MODELFILES_STRING )
+        print('option name gpu_id type combo default ' + str(DEFAULT_GPU_ID) + ' var ' + str(DEFAULT_GPU_ID) )
         print('option name batchsize type spin default ' + str(DEFAULT_BATCH_SIZE) + ' min 1 max 256')
         print('option name resign_threshold type spin default ' + str(int(DEFAULT_RESIGN_THRESHOLD * 100)) + ' min 0 max 100')
         print('option name c_puct type spin default ' + str(int(DEFAULT_C_PUCT * 100)) + ' min 10 max 1000')
@@ -160,7 +181,7 @@ class MCTSPlayer(BasePlayer):
     def load_model(self):
         self.model = PolicyValueNetwork()
         self.model.to(self.device)
-        checkpoint = torch.load(self.modelfile, map_location=self.device)
+        checkpoint = torch.load(self.DEFAULT_MODELFILE_FOLDER + self.modelfile, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
         # モデルを評価モードにする
         self.model.eval()
@@ -511,6 +532,7 @@ class MCTSPlayer(BasePlayer):
 
         # PV
         pv = move_to_usi(bestmove)
+        depth = 1  # 探索の深さ（depth）表示に対応
         ponder_move = None
         pv_node = current_node
         while pv_node.child_node:
@@ -521,12 +543,13 @@ class MCTSPlayer(BasePlayer):
             pv += ' ' + move_to_usi(pv_node.child_move[selected_index])
             if ponder_move is None:
                 ponder_move = pv_node.child_move[selected_index]
+            depth+=1
 
-        print('info nps {} time {} nodes {} score cp {} pv {}'.format(
+        print('info nps {} time {} nodes {} score cp {} depth {} pv {}'.format(
             int(self.playout_count / finish_time) if finish_time > 0 else 0,
             int(finish_time * 1000),
             current_node.move_count,
-            cp, pv), flush=True)
+            cp, depth, pv), flush=True)
 
         return bestmove, bestvalue, ponder_move
 
