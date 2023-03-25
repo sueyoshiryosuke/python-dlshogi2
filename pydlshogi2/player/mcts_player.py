@@ -13,9 +13,9 @@ import os
 import glob
 
 # CPUのみ用の設定に変更
-# デフォルトGPU ID 0->-1
+# デフォルトGPU ID GPU使用：0、GPUを使用しない：-1
 DEFAULT_GPU_ID = -1
-# デフォルトバッチサイズ 32->8
+# デフォルトバッチサイズ CPUだと8、GPUだと32以上
 DEFAULT_BATCH_SIZE = 8
 # デフォルト投了閾値
 DEFAULT_RESIGN_THRESHOLD = 0.01
